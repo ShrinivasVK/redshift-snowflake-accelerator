@@ -5,6 +5,8 @@
 -- Uses CREATE OR REPLACE so it's safe to re-run (idempotent).
 -- ─────────────────────────────────────────────────────────
 
+USE SYSADMIN;   
+
 -- DEV Database
 CREATE DATABASE IF NOT EXISTS MIGRATION_ACCELERATOR_DEV
     COMMENT = 'ArisData Migration Accelerator — Development Environment';
