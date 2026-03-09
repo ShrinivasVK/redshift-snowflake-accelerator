@@ -20,30 +20,38 @@ def get_trigger_mode():
 # ── 2. Get SQL files based on trigger mode ──────────────────
 def get_sql_files(mode: str):
     """
-    PUSH mode:   Only return SQL files changed in the latest commit
-    MANUAL mode: Return ALL SQL files in the snowflake/ folder
+    PUSH mode:   Only deploy changed files, but in manifest order
+    MANUAL mode: Deploy ALL files in manifest order
     """
-    if mode == "workflow_dispatch":
-        # Full re-deploy — find all .sql files recursively
-        sql_files = sorted(
+    manifest_path = Path("snowflake/manifest.txt")
+
+    # Read the manifest to get the correct execution order
+    if manifest_path.exists():
+        with open(manifest_path) as f:
+            manifest_order = [
+                f"snowflake/{line.strip()}"
+                for line in f
+                if line.strip() and not line.startswith("#")
+            ]
+    else:
+        # Fallback — alphabetical if no manifest exists
+        manifest_order = sorted(
             [str(p).replace("\\", "/") for p in Path("snowflake").rglob("*.sql")]
         )
-        print(f"📋 Full deploy mode — all SQL files found: {len(sql_files)}")
+
+    if mode == "workflow_dispatch":
+        # Full deploy — all files in manifest order
+        sql_files = [f for f in manifest_order if Path(f).exists()]
+        print(f"📋 Full deploy mode — all SQL files: {len(sql_files)}")
     else:
-        # Incremental deploy — only changed files in latest push
+        # Incremental — only changed files, but still in manifest order
         result = subprocess.run(
             ["git", "diff", "--name-only", "HEAD~1", "HEAD"],
             capture_output=True,
             text=True,
         )
-        all_changed = result.stdout.strip().split("\n")
-        sql_files = sorted(
-            [
-                f
-                for f in all_changed
-                if f.endswith(".sql") and f.startswith("snowflake/")
-            ]
-        )
+        changed = set(result.stdout.strip().split("\n"))
+        sql_files = [f for f in manifest_order if f in changed and f.endswith(".sql")]
         print(f"📋 Incremental deploy mode — changed SQL files: {len(sql_files)}")
 
     for f in sql_files:
