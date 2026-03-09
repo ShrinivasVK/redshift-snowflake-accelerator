@@ -1,6 +1,15 @@
+-- snowflake/databases/DEV/init.sql
+-- ─────────────────────────────────────────────────────────
+-- Creates the DEV environment foundation.
+-- This runs ONCE when setting up a new environment.
+-- Uses CREATE OR REPLACE so it's safe to re-run (idempotent).
+-- ─────────────────────────────────────────────────────────
+
+-- DEV Database
 CREATE DATABASE IF NOT EXISTS MIGRATION_ACCELERATOR_DEV
     COMMENT = 'ArisData Migration Accelerator — Development Environment';
 
+-- Schemas (one per functional layer — Open/Closed principle)
 CREATE SCHEMA IF NOT EXISTS MIGRATION_ACCELERATOR_DEV.CONTROL
     COMMENT = 'Orchestration: queues, run logs, config tables';
 
