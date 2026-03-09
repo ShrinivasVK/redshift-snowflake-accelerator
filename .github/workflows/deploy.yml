@@ -11,52 +11,34 @@ name: Deploy to Snowflake
 on:
   push:
     branches:
-      - main          # Only triggers on pushes to main, not other branches
+      - main
     paths:
-      - 'snowflake/**'  # Only triggers if files inside /snowflake/ changed
-  workflow_dispatch:   # Allows manual triggering from GitHub UI
+      - 'snowflake/**'
+  workflow_dispatch:
 
 jobs:
   deploy:
     name: Deploy Snowflake Objects
-    runs-on: ubuntu-latest   # GitHub spins up a fresh Linux machine for each run
+    runs-on: ubuntu-latest
 
     steps:
-
-      # Step 1: Download your repo code onto the GitHub machine
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 2    # Need last 2 commits to detect what changed
+          fetch-depth: 2
 
-      # Step 2: Install Python (needed to run our deployment script)
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
-      # Step 3: Install Snowflake's Python connector
       - name: Install dependencies
         run: pip install snowflake-connector-python cryptography
 
-      # Step 4: Write the private key from GitHub Secret to a temp file
-      # (Snowflake connector needs it as a file, not a string)
-      - name: Prepare private key
-        run: |
-          cat << 'EOF' > /tmp/rsa_key.p8
-          ${{ secrets.SNOWFLAKE_PRIVATE_KEY }}
-          EOF
-          chmod 600 /tmp/rsa_key.p8
-
-      # Step 5: Detect which SQL files changed in this push and run them
       - name: Deploy changed SQL files
         env:
           SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
           SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
           SNOWFLAKE_ROLE: ${{ secrets.SNOWFLAKE_ROLE }}
+          SNOWFLAKE_PRIVATE_KEY: ${{ secrets.SNOWFLAKE_PRIVATE_KEY }}
         run: python scripts/deploy.py
-
-      # Step 6: Clean up the private key file (security hygiene)
-      - name: Clean up key
-        if: always()    # Runs even if previous steps failed
-        run: rm -f /tmp/rsa_key.p8

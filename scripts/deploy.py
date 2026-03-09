@@ -38,21 +38,26 @@ def get_changed_sql_files():
 def get_snowflake_connection():
     """Creates a Snowflake connection using key-pair auth (no password)."""
 
-    # Load private key from temp file written by the workflow
-    with open("/tmp/rsa_key.p8", "rb") as key_file:
-        private_key = serialization.load_pem_private_key(key_file.read(), password=None)
+    # Read key directly from environment variable
+    # Strip \r characters that Windows adds to line endings
+    private_key_str = os.environ["SNOWFLAKE_PRIVATE_KEY"].replace('\r\n', '\n').replace('\r', '\n')
+
+    private_key = serialization.load_pem_private_key(
+        private_key_str.encode(),
+        password=None
+    )
 
     private_key_bytes = private_key.private_bytes(
         encoding=serialization.Encoding.DER,
         format=serialization.PrivateFormat.PKCS8,
-        encryption_algorithm=serialization.NoEncryption(),
+        encryption_algorithm=serialization.NoEncryption()
     )
 
     conn = snowflake.connector.connect(
         account=os.environ["SNOWFLAKE_ACCOUNT"],
         user=os.environ["SNOWFLAKE_USER"],
         role=os.environ["SNOWFLAKE_ROLE"],
-        private_key=private_key_bytes,
+        private_key=private_key_bytes
     )
 
     print("✅ Connected to Snowflake successfully")
