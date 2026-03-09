@@ -61,7 +61,7 @@ def get_snowflake_connection():
     private_key_b64 = os.environ["SNOWFLAKE_PRIVATE_KEY"].strip()
     private_key_pem = base64.b64decode(private_key_b64)
 
-    private_key = serialization.load_der_private_key(private_key_pem, password=None)
+    private_key = serialization.load_pem_private_key(private_key_pem, password=None)
 
     private_key_bytes = private_key.private_bytes(
         encoding=serialization.Encoding.DER,
