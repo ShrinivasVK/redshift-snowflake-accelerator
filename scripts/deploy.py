@@ -5,6 +5,7 @@ import snowflake.connector
 from cryptography.hazmat.primitives import serialization
 from pathlib import Path
 
+
 # ── 1. Detect how the workflow was triggered ────────────────
 def get_trigger_mode():
     """
@@ -24,22 +25,25 @@ def get_sql_files(mode: str):
     """
     if mode == "workflow_dispatch":
         # Full re-deploy — find all .sql files recursively
-        sql_files = sorted([
-            str(p).replace("\\", "/")
-            for p in Path("snowflake").rglob("*.sql")
-        ])
+        sql_files = sorted(
+            [str(p).replace("\\", "/") for p in Path("snowflake").rglob("*.sql")]
+        )
         print(f"📋 Full deploy mode — all SQL files found: {len(sql_files)}")
     else:
         # Incremental deploy — only changed files in latest push
         result = subprocess.run(
             ["git", "diff", "--name-only", "HEAD~1", "HEAD"],
-            capture_output=True, text=True
+            capture_output=True,
+            text=True,
         )
         all_changed = result.stdout.strip().split("\n")
-        sql_files = sorted([
-            f for f in all_changed
-            if f.endswith(".sql") and f.startswith("snowflake/")
-        ])
+        sql_files = sorted(
+            [
+                f
+                for f in all_changed
+                if f.endswith(".sql") and f.startswith("snowflake/")
+            ]
+        )
         print(f"📋 Incremental deploy mode — changed SQL files: {len(sql_files)}")
 
     for f in sql_files:
@@ -48,30 +52,28 @@ def get_sql_files(mode: str):
     return sql_files
 
 
-# ── 3. Connect to Snowflake ─────────────────────────────────
 def get_snowflake_connection():
-    """Creates a Snowflake connection using key-pair auth."""
+    """Creates a Snowflake connection using base64-encoded key-pair auth."""
+    import base64
 
-    private_key_str = os.environ["SNOWFLAKE_PRIVATE_KEY"]\
-        .replace('\r\n', '\n')\
-        .replace('\r', '\n')
+    # Decode the base64-encoded private key from GitHub Secrets
+    # This avoids all Windows/Linux line ending issues entirely
+    private_key_b64 = os.environ["SNOWFLAKE_PRIVATE_KEY"].strip()
+    private_key_pem = base64.b64decode(private_key_b64)
 
-    private_key = serialization.load_pem_private_key(
-        private_key_str.encode(),
-        password=None
-    )
+    private_key = serialization.load_der_private_key(private_key_pem, password=None)
 
     private_key_bytes = private_key.private_bytes(
         encoding=serialization.Encoding.DER,
         format=serialization.PrivateFormat.PKCS8,
-        encryption_algorithm=serialization.NoEncryption()
+        encryption_algorithm=serialization.NoEncryption(),
     )
 
     conn = snowflake.connector.connect(
         account=os.environ["SNOWFLAKE_ACCOUNT"],
         user=os.environ["SNOWFLAKE_USER"],
         role=os.environ["SNOWFLAKE_ROLE"],
-        private_key=private_key_bytes
+        private_key=private_key_bytes,
     )
 
     print("✅ Connected to Snowflake successfully")
@@ -126,7 +128,9 @@ def main():
     conn.close()
 
     print(f"\n{'─'*50}")
-    print(f"Deployment complete: {len(sql_files) - len(failed)} succeeded, {len(failed)} failed")
+    print(
+        f"Deployment complete: {len(sql_files) - len(failed)} succeeded, {len(failed)} failed"
+    )
 
     if failed:
         print("\nFailed files:")
