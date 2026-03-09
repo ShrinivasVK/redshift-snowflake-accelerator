@@ -1,46 +1,60 @@
 # scripts/deploy.py
-# ─────────────────────────────────────────────────────────────
-# This script:
-#   1. Detects which SQL files changed in the latest Git push
-#   2. Connects to Snowflake using key-pair authentication
-#   3. Runs each changed SQL file in order
-#   4. Logs success or failure for each file
-# ─────────────────────────────────────────────────────────────
-
 import os
 import subprocess
 import snowflake.connector
 from cryptography.hazmat.primitives import serialization
 from pathlib import Path
 
+# ── 1. Detect how the workflow was triggered ────────────────
+def get_trigger_mode():
+    """
+    Returns 'manual' if triggered via GitHub UI (workflow_dispatch)
+    Returns 'push' if triggered by a git push
+    """
+    event = os.environ.get("GITHUB_EVENT_NAME", "push")
+    print(f"ℹ️  Trigger mode: {event}")
+    return event
 
-# ── 1. Detect changed SQL files ────────────────────────────
-def get_changed_sql_files():
-    """Returns a sorted list of SQL files changed in the last commit."""
-    result = subprocess.run(
-        ["git", "diff", "--name-only", "HEAD~1", "HEAD"], capture_output=True, text=True
-    )
-    all_changed = result.stdout.strip().split("\n")
 
-    # Only care about .sql files inside the snowflake/ folder
-    sql_files = sorted(
-        [f for f in all_changed if f.endswith(".sql") and f.startswith("snowflake/")]
-    )
+# ── 2. Get SQL files based on trigger mode ──────────────────
+def get_sql_files(mode: str):
+    """
+    PUSH mode:   Only return SQL files changed in the latest commit
+    MANUAL mode: Return ALL SQL files in the snowflake/ folder
+    """
+    if mode == "workflow_dispatch":
+        # Full re-deploy — find all .sql files recursively
+        sql_files = sorted([
+            str(p).replace("\\", "/")
+            for p in Path("snowflake").rglob("*.sql")
+        ])
+        print(f"📋 Full deploy mode — all SQL files found: {len(sql_files)}")
+    else:
+        # Incremental deploy — only changed files in latest push
+        result = subprocess.run(
+            ["git", "diff", "--name-only", "HEAD~1", "HEAD"],
+            capture_output=True, text=True
+        )
+        all_changed = result.stdout.strip().split("\n")
+        sql_files = sorted([
+            f for f in all_changed
+            if f.endswith(".sql") and f.startswith("snowflake/")
+        ])
+        print(f"📋 Incremental deploy mode — changed SQL files: {len(sql_files)}")
 
-    print(f"📋 Changed SQL files detected: {len(sql_files)}")
     for f in sql_files:
         print(f"   → {f}")
 
     return sql_files
 
 
-# ── 2. Connect to Snowflake ─────────────────────────────────
+# ── 3. Connect to Snowflake ─────────────────────────────────
 def get_snowflake_connection():
-    """Creates a Snowflake connection using key-pair auth (no password)."""
+    """Creates a Snowflake connection using key-pair auth."""
 
-    # Read key directly from environment variable
-    # Strip \r characters that Windows adds to line endings
-    private_key_str = os.environ["SNOWFLAKE_PRIVATE_KEY"].replace('\r\n', '\n').replace('\r', '\n')
+    private_key_str = os.environ["SNOWFLAKE_PRIVATE_KEY"]\
+        .replace('\r\n', '\n')\
+        .replace('\r', '\n')
 
     private_key = serialization.load_pem_private_key(
         private_key_str.encode(),
@@ -64,7 +78,7 @@ def get_snowflake_connection():
     return conn
 
 
-# ── 3. Run a single SQL file ────────────────────────────────
+# ── 4. Run a single SQL file ────────────────────────────────
 def run_sql_file(conn, filepath: str):
     """Reads a SQL file and executes each statement inside it."""
 
@@ -73,7 +87,7 @@ def run_sql_file(conn, filepath: str):
     with open(filepath, "r") as f:
         sql_content = f.read()
 
-    # Split file into individual statements (separated by semicolons)
+    # Split on semicolons to get individual statements
     statements = [s.strip() for s in sql_content.split(";") if s.strip()]
 
     cursor = conn.cursor()
@@ -83,20 +97,20 @@ def run_sql_file(conn, filepath: str):
             print(f"   ✅ Statement {i}/{len(statements)} executed")
         except Exception as e:
             print(f"   ❌ Statement {i}/{len(statements)} FAILED: {e}")
-            raise  # Stop deployment if any statement fails
-
+            raise
     cursor.close()
     print(f"   ✓ {filepath} deployed successfully")
 
 
-# ── 4. Main orchestrator ────────────────────────────────────
+# ── 5. Main orchestrator ────────────────────────────────────
 def main():
     print("🚀 Starting Snowflake deployment\n")
 
-    sql_files = get_changed_sql_files()
+    mode = get_trigger_mode()
+    sql_files = get_sql_files(mode)
 
     if not sql_files:
-        print("ℹ️  No SQL files changed — nothing to deploy")
+        print("ℹ️  No SQL files to deploy — exiting")
         return
 
     conn = get_snowflake_connection()
@@ -107,20 +121,18 @@ def main():
             run_sql_file(conn, filepath)
         except Exception as e:
             failed.append(filepath)
-            print(f"❌ FAILED: {filepath}")
+            print(f"❌ FAILED: {filepath} — {e}")
 
     conn.close()
 
     print(f"\n{'─'*50}")
-    print(
-        f"Deployment complete: {len(sql_files) - len(failed)} succeeded, {len(failed)} failed"
-    )
+    print(f"Deployment complete: {len(sql_files) - len(failed)} succeeded, {len(failed)} failed")
 
     if failed:
         print("\nFailed files:")
         for f in failed:
             print(f"  ✗ {f}")
-        exit(1)  # Non-zero exit tells GitHub the deployment failed
+        exit(1)
     else:
         print("✅ All files deployed successfully")
 
