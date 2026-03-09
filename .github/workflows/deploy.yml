@@ -43,7 +43,9 @@ jobs:
       # (Snowflake connector needs it as a file, not a string)
       - name: Prepare private key
         run: |
-          echo "${{ secrets.SNOWFLAKE_PRIVATE_KEY }}" > /tmp/rsa_key.p8
+          cat << 'EOF' > /tmp/rsa_key.p8
+          ${{ secrets.SNOWFLAKE_PRIVATE_KEY }}
+          EOF
           chmod 600 /tmp/rsa_key.p8
 
       # Step 5: Detect which SQL files changed in this push and run them
