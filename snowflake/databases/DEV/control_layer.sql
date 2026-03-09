@@ -5,7 +5,7 @@
 -- new behaviors are added via INSERT, never ALTER.
 -- ─────────────────────────────────────────────────────────
 
-USE SYSADMIN;
+USE ROLE SYSADMIN;
 
 USE DATABASE MIGRATION_ACCELERATOR_DEV;
 USE SCHEMA CONTROL;

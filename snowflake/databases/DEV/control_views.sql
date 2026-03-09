@@ -5,6 +5,7 @@
 -- into migration status without complex JOINs every time.
 -- ─────────────────────────────────────────────────────────
 
+USE ROLE SYSADMIN;
 USE DATABASE MIGRATION_ACCELERATOR_DEV;
 USE SCHEMA CONTROL;
 

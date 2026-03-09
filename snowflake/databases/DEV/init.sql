@@ -5,7 +5,7 @@
 -- Uses CREATE OR REPLACE so it's safe to re-run (idempotent).
 -- ─────────────────────────────────────────────────────────
 
-USE SYSADMIN;   
+USE ROLE SYSADMIN;
 
 -- DEV Database
 CREATE DATABASE IF NOT EXISTS MIGRATION_ACCELERATOR_DEV

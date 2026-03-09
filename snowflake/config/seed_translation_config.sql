@@ -7,6 +7,8 @@
 -- the old one. This preserves the full audit history.
 -- ─────────────────────────────────────────────────────────
 
+USE ROLE SYSADMIN;
+
 USE DATABASE MIGRATION_ACCELERATOR_DEV;
 USE SCHEMA CONTROL;
 
