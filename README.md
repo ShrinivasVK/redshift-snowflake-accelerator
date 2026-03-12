@@ -565,4 +565,4 @@ For questions, issues, or contributions:
 
 ---
 
-*Built with ❄️ by ArisData — Snowflake is a complete Data & AI Platform, not just a warehouse.*
+*Built with* ❄️ *by ArisData — Snowflake is a complete Data & AI Platform, not just a warehouse.*
