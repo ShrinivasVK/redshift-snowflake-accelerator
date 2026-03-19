@@ -138,6 +138,18 @@ $$
                 ('${RUN_ID}', 'VALIDATION', 'SP_VALIDATE_NULL_RATES', 'STARTED')
         `});
 
+        var thresholdStmt = snowflake.createStatement({sqlText: `
+            SELECT FAIL_THRESHOLD
+            FROM MIGRATION_ACCELERATOR_DEV.CONTROL.VALIDATION_CONFIG
+            WHERE CHECK_TYPE = 'NULL_RATE' AND IS_ACTIVE = TRUE
+            LIMIT 1
+        `});
+        var thresholdResult = thresholdStmt.execute();
+        var failThreshold = 1;
+        if (thresholdResult.next()) {
+            failThreshold = thresholdResult.getColumnValue('FAIL_THRESHOLD') || 1;
+        }
+
         var colStmt = snowflake.createStatement({sqlText: `
             SELECT COLUMN_NAME
             FROM MIGRATION_ACCELERATOR_DEV.INFORMATION_SCHEMA.COLUMNS
@@ -150,18 +162,31 @@ $$
         while (colResult.next()) {
             var columnName = colResult.getColumnValue('COLUMN_NAME');
 
-            var nullStmt = snowflake.createStatement({sqlText: `
-                SELECT 
+            var sourceStmt = snowflake.createStatement({sqlText: `
+                SELECT
+                    COUNT_IF(${columnName} IS NULL) / NULLIF(COUNT(*), 0) * 100 AS NULL_RATE
+                FROM MIGRATION_ACCELERATOR_DEV.STAGING.${TABLE_NAME}
+            `});
+            var sourceResult = sourceStmt.execute();
+            sourceResult.next();
+            var sourceRate = sourceResult.getColumnValue('NULL_RATE') || 0;
+            var sourceRateRounded = Math.round(sourceRate * 10000) / 10000;
+
+            var targetStmt = snowflake.createStatement({sqlText: `
+                SELECT
                     COUNT_IF(${columnName} IS NULL) / NULLIF(COUNT(*), 0) * 100 AS NULL_RATE
                 FROM MIGRATION_ACCELERATOR_DEV.TARGET.${TABLE_NAME}
             `});
-            var nullResult = nullStmt.execute();
-            nullResult.next();
-            var nullRate = nullResult.getColumnValue('NULL_RATE') || 0;
-            var nullRateRounded = Math.round(nullRate * 10000) / 10000;
+            var targetResult = targetStmt.execute();
+            targetResult.next();
+            var targetRate = targetResult.getColumnValue('NULL_RATE') || 0;
+            var targetRateRounded = Math.round(targetRate * 10000) / 10000;
+
+            var delta = Math.abs(targetRateRounded - sourceRateRounded);
+            var deltaRounded = Math.round(delta * 10000) / 10000;
 
             var checkResult = 'PASS';
-            if (nullRate > 50.0) {
+            if (deltaRounded > failThreshold) {
                 checkResult = 'FAIL';
             }
 
@@ -169,7 +194,12 @@ $$
                 INSERT INTO MIGRATION_ACCELERATOR_DEV.CONTROL.VALIDATION_RESULTS
                     (RUN_ID, CHECK_NAME, SOURCE_VALUE, TARGET_VALUE, VARIANCE_PCT, STATUS)
                 SELECT
-                    '${RUN_ID}', 'NULL_RATE:${TABLE_NAME}.${columnName}', TO_VARIANT('N/A'), TO_VARIANT('${nullRateRounded}%'), ${nullRateRounded}, '${checkResult}'
+                    '${RUN_ID}',
+                    'NULL_RATE:${TABLE_NAME}.${columnName}',
+                    TO_VARIANT('${sourceRateRounded}%'),
+                    TO_VARIANT('${targetRateRounded}%'),
+                    ${deltaRounded},
+                    '${checkResult}'
             `});
 
             columnsChecked++;
