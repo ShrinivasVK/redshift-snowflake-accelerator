@@ -7,7 +7,7 @@ USE ROLE SYSADMIN;
 USE DATABASE MIGRATION_ACCELERATOR_DEV;
 USE SCHEMA VALIDATION;
 
-CREATE OR REPLACE PROCEDURE SP_VALIDATE_ROW_COUNTS(
+CREATE OR REPLACE PROCEDURE MIGRATION_ACCELERATOR_DEV.VALIDATION.SP_VALIDATE_ROW_COUNTS(
     RUN_ID VARCHAR
 )
 RETURNS VARCHAR
@@ -75,7 +75,7 @@ $$
                 INSERT INTO MIGRATION_ACCELERATOR_DEV.CONTROL.VALIDATION_RESULTS
                     (RUN_ID, CHECK_NAME, SOURCE_VALUE, TARGET_VALUE, VARIANCE_PCT, STATUS)
                 SELECT
-                    '${RUN_ID}', 'ROW_COUNT:${sourceTable}', TO_VARIANT('${sourceCount}'), TO_VARIANT('${targetCount}'), ${varianceRounded}, '${checkResult}'
+                    '${RUN_ID}', UPPER('${sourceTable}'), TO_VARIANT(${sourceCount}), TO_VARIANT(${targetCount}), ${varianceRounded}, '${checkResult}'
             `});
 
             tablesValidated++;
@@ -195,9 +195,9 @@ $$
                     (RUN_ID, CHECK_NAME, SOURCE_VALUE, TARGET_VALUE, VARIANCE_PCT, STATUS)
                 SELECT
                     '${RUN_ID}',
-                    'NULL_RATE:${TABLE_NAME}.${columnName}',
-                    TO_VARIANT('${sourceRateRounded}%'),
-                    TO_VARIANT('${targetRateRounded}%'),
+                    UPPER('${TABLE_NAME}') || '.' || '${columnName}',
+                    TO_VARIANT(${sourceRateRounded}),
+                    TO_VARIANT(${targetRateRounded}),
                     ${deltaRounded},
                     '${checkResult}'
             `});
@@ -232,42 +232,48 @@ $$
 $$;
 
 
---
 
--- Run row count validation
-CALL MIGRATION_ACCELERATOR_DEV.VALIDATION.SP_VALIDATE_ROW_COUNTS(
-    'f71a5e9c-3ec7-4a33-ae84-a0cda464d63a'
-);
+-- --
 
--- Run null rate validation for two tables
-CALL MIGRATION_ACCELERATOR_DEV.VALIDATION.SP_VALIDATE_NULL_RATES(
-    'f71a5e9c-3ec7-4a33-ae84-a0cda464d63a',
-    'USERS'
-);
 
-CALL MIGRATION_ACCELERATOR_DEV.VALIDATION.SP_VALIDATE_NULL_RATES(
-    'f71a5e9c-3ec7-4a33-ae84-a0cda464d63a',
-    'SALES'
-);
 
--- Check validation results
-SELECT 
-    CHECK_NAME,
-    SOURCE_VALUE,
-    TARGET_VALUE,
-    VARIANCE_PCT,
-    STATUS
-FROM MIGRATION_ACCELERATOR_DEV.CONTROL.VALIDATION_RESULTS
-WHERE RUN_ID = 'f71a5e9c-3ec7-4a33-ae84-a0cda464d63a'
-ORDER BY CHECK_NAME;
+-- --
+-- --
 
--- Check all tables reached VALIDATED status
-SELECT SOURCE_TABLE, STATUS
-FROM MIGRATION_ACCELERATOR_DEV.CONTROL.MIGRATION_TABLE_REGISTRY
-WHERE RUN_ID = 'f71a5e9c-3ec7-4a33-ae84-a0cda464d63a'
-ORDER BY SOURCE_TABLE;
+-- -- Run row count validation
+-- CALL MIGRATION_ACCELERATOR_DEV.VALIDATION.SP_VALIDATE_ROW_COUNTS(
+--     'f71a5e9c-3ec7-4a33-ae84-a0cda464d63a'
+-- );
 
--- Check pipeline log
-SELECT PHASE, STEP_NAME, STATUS, ROWS_PROCESSED, ERROR_MESSAGE
-FROM MIGRATION_ACCELERATOR_DEV.CONTROL.PIPELINE_RUN_LOG
-ORDER BY LOGGED_AT;
+-- -- Run null rate validation for two tables
+-- CALL MIGRATION_ACCELERATOR_DEV.VALIDATION.SP_VALIDATE_NULL_RATES(
+--     'f71a5e9c-3ec7-4a33-ae84-a0cda464d63a',
+--     'USERS'
+-- );
+
+-- CALL MIGRATION_ACCELERATOR_DEV.VALIDATION.SP_VALIDATE_NULL_RATES(
+--     'f71a5e9c-3ec7-4a33-ae84-a0cda464d63a',
+--     'SALES'
+-- );
+
+-- -- Check validation results
+-- SELECT 
+--     CHECK_NAME,
+--     SOURCE_VALUE,
+--     TARGET_VALUE,
+--     VARIANCE_PCT,
+--     STATUS
+-- FROM MIGRATION_ACCELERATOR_DEV.CONTROL.VALIDATION_RESULTS
+-- WHERE RUN_ID = 'f71a5e9c-3ec7-4a33-ae84-a0cda464d63a'
+-- ORDER BY CHECK_NAME;
+
+-- -- Check all tables reached VALIDATED status
+-- SELECT SOURCE_TABLE, STATUS
+-- FROM MIGRATION_ACCELERATOR_DEV.CONTROL.MIGRATION_TABLE_REGISTRY
+-- WHERE RUN_ID = 'f71a5e9c-3ec7-4a33-ae84-a0cda464d63a'
+-- ORDER BY SOURCE_TABLE;
+
+-- -- Check pipeline log
+-- SELECT PHASE, STEP_NAME, STATUS, ROWS_PROCESSED, ERROR_MESSAGE
+-- FROM MIGRATION_ACCELERATOR_DEV.CONTROL.PIPELINE_RUN_LOG
+-- ORDER BY LOGGED_AT;
