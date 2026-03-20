@@ -335,37 +335,41 @@ ORDER BY
   WHAT THIS STEP DOES
   -------------------
   Reads the Redshift query history and classifies each query
-  into one of three complexity buckets:
+  into a workload category using Snowflake Cortex AI:
 
-    GREEN  — Direct translation. No manual work needed.
-             Standard SELECT / JOIN / aggregation patterns.
+    REPORTING   — SELECT-heavy analytical queries, dashboards,
+                  and aggregation patterns. Typically the largest
+                  share of any Redshift workload.
 
-    YELLOW — Minor modifications required.
-             Functions that have a direct Snowflake equivalent
-             but need a find-and-replace (e.g., GETDATE() →
-             CURRENT_TIMESTAMP()).
+    ETL         — INSERT/SELECT, COPY, CTAS, and data pipeline
+                  queries that move or transform data between
+                  tables or stages.
 
-    RED    — Significant rewrite needed.
-             Redshift-specific features, leader-node-only
-             functions, or complex PL/pgSQL logic that has
-             no direct Snowflake equivalent.
+    AD_HOC      — One-off exploratory queries, data checks, or
+                  developer/analyst investigations that are not
+                  part of a scheduled workflow.
 
-  This classification tells the migration team exactly where
-  to focus human effort — instead of reviewing every query,
-  they only touch the RED ones.
+    MAINTENANCE — DDL operations, VACUUM, ANALYZE, permission
+                  grants, and other housekeeping statements.
+
+  This classification tells the migration team the composition
+  of the SQL workload — how much is reporting vs. ETL vs.
+  operational — so they can plan the translation effort by
+  workload type rather than reviewing every query blindly.
 
   WHERE DATA COMES FROM
   ----------------------
   - Simulated query log stored in the TRANSLATION schema
     (in a real engagement this comes from Redshift's
     STL_QUERY or SVL_QLOG system tables)
-  - Cortex AI (mistral-large) for complexity scoring
+  - Snowflake Cortex AI (mistral-large) for classification
 
   PURPOSE
   -------
-  Prioritize manual review effort. Give the client a clear
-  picture of how much of their SQL workload can be migrated
-  automatically vs. how much needs human attention.
+  Give the migration team a clear breakdown of the SQL workload
+  by type. ETL queries typically need the most rewriting for
+  Snowflake compatibility, while REPORTING queries often
+  translate with minimal changes.
 
   DATABASE OBJECTS USED
   ----------------------
@@ -375,8 +379,8 @@ ORDER BY
 
   DATABASE OBJECTS AFFECTED
   --------------------------
-  - TRANSLATION.QUERY_CLASSIFICATION → one row per query
-    with COMPLEXITY_LEVEL assigned
+  - TRANSLATION.QUERY_CLASSIFICATION_LOG → one row per query
+    with QUERY_CATEGORY and CONFIDENCE assigned
   - CONTROL.PIPELINE_RUN_LOG → STARTED and SUCCESS rows logged
 */
 
